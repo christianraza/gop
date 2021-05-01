@@ -409,7 +409,7 @@ func release(dir string) {
 	tmp.Close()
 
 	if packFlag {
-		fmt.Printf("\nUploading~\n\n")
+		fmt.Printf("\nUploading Assets~\n\n")
 		args := []string{"release", "upload", version}
 		for _, a := range assets {
 			fmt.Printf("\U0001F4EC %s\n", a.Name())
