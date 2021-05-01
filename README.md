@@ -2,6 +2,7 @@
 My personal Go packaging and release script.
 
 ## Dependencies
+[Git](https://github.com/git/git)  
 [Gox](https://github.com/mitchellh/gox)  
 [Github CLI](https://github.com/cli/cli)
 
