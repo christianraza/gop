@@ -415,10 +415,27 @@ func release(dir string) {
 			fmt.Printf("\U0001F4EC %s\n", a.Name())
 			args = append(args, filepath.Join(dir, a.Name()))
 		}
-
 		cmd = exec.Command("gh", args...)
 		err = runCmd(cmd)
 		if err != nil {
+			// Cleanup
+			fmt.Fprintf(os.Stderr, "\n\u2757 Could not upload assets: %s\n", version)
+			fmt.Fprintf(os.Stderr, "\n\u2757 Deleting release...\n")
+			args := []string{"release", "delete", version}
+			cmd := exec.Command("gh", args...)
+			err = runCmd(cmd)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "\n\u2757 Could not delete release: %s\n", version)
+				os.Exit(0)
+			}
+			fmt.Fprintf(os.Stderr, "\n\u2757 Deleting remote tag...\n")
+			args = []string{"push", "--delete", version}
+			cmd = exec.Command("git", args...)
+			err = runCmd(cmd)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "\n\u2757 Could not delete remote tag: %s\n", version)
+				os.Exit(0)
+			}
 			logErr.Fatal(err)
 		}
 	}
