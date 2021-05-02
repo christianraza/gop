@@ -418,9 +418,9 @@ func release(dir string) {
 		cmd = exec.Command("gh", args...)
 		err = runCmd(cmd)
 		if err != nil {
-			// Cleanup
 			fmt.Fprintf(os.Stderr, "\n\u2757 Could not upload assets: %s\n", version)
-			fmt.Fprintf(os.Stderr, "\n\u2757 Deleting release...\n")
+			// Cleanup
+			fmt.Fprintf(os.Stdout, "\nDeleting release...\n")
 			args := []string{"release", "delete", version}
 			cmd := exec.Command("gh", args...)
 			err = runCmd(cmd)
@@ -428,7 +428,8 @@ func release(dir string) {
 				fmt.Fprintf(os.Stderr, "\n\u2757 Could not delete release: %s\n", version)
 				os.Exit(0)
 			}
-			fmt.Fprintf(os.Stderr, "\n\u2757 Deleting remote tag...\n")
+			fmt.Fprintf(os.Stdout, "\n\u2705 Release deleted\n")
+			fmt.Fprintf(os.Stdout, "\nDeleting remote tag...\n")
 			args = []string{"push", "--delete", version}
 			cmd = exec.Command("git", args...)
 			err = runCmd(cmd)
@@ -436,6 +437,7 @@ func release(dir string) {
 				fmt.Fprintf(os.Stderr, "\n\u2757 Could not delete remote tag: %s\n", version)
 				os.Exit(0)
 			}
+			fmt.Fprintf(os.Stdout, "\n\u2705 Remote tag deleted\n")
 			logErr.Fatal(err)
 		}
 	}
