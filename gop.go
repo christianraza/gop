@@ -438,7 +438,7 @@ func release(dir string) {
 				os.Exit(0)
 			}
 			fmt.Fprintf(os.Stdout, "\n\u2705 Remote tag deleted\n")
-			logErr.Fatal(err)
+			os.Exit(0)
 		}
 	}
 }
