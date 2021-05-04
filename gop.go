@@ -51,7 +51,7 @@ var prerelease bool
 var projectName string
 var modulePath string
 
-var logErr *log.Logger = log.New(os.Stdout, "", log.Lshortfile)
+var logErr *log.Logger = log.New(os.Stderr, "", log.Lshortfile)
 
 type copyFunc func(root string, path string, info fs.FileInfo) io.Writer
 
