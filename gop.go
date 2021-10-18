@@ -362,20 +362,6 @@ func funcWalk(dir string, f walkFunc) {
 	}
 }
 
-func copy(from string, to io.Writer) (err error) {
-	var f *os.File
-	f, err = os.Open(from)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	_, err = io.Copy(to, f)
-	if err != nil {
-		return
-	}
-	return
-}
-
 func readme(name string) string {
 	var b strings.Builder
 	b.WriteString("Thank you for downloading ")
