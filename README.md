@@ -8,7 +8,7 @@ My personal Go packaging and release script.
 
 ## Installation
 ```
-$ go get github.com/christianraza/gop
+$ go install github.com/christianraza/gop@latest
 ```
 ## Usage
 ##### Package assets
