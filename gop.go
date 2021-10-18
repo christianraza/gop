@@ -368,13 +368,17 @@ func readme(name string) string {
 }
 
 func release(dir string) {
-	assets, err := ioutil.ReadDir(dir)
-	if err != nil {
-		logErr.Fatal(err)
-	}
-	if packFlag && len(assets) <= 0 {
-		fmt.Fprintf(os.Stderr, "No assets in %s directory\n", dir)
-		os.Exit(0)
+	var assets []fs.FileInfo
+	if packFlag {
+		var err error
+		assets, err = ioutil.ReadDir(dir)
+		if err != nil {
+			logErr.Fatal(err)
+		}
+		if len(assets) <= 0 {
+			fmt.Fprintf(os.Stderr, "No assets in %s directory\n", dir)
+			os.Exit(0)
+		}
 	}
 
 	fmt.Printf("\nReleasing:\n\n")
