@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // Configuration
@@ -53,7 +54,7 @@ var modulePath string
 
 var logErr *log.Logger = log.New(os.Stderr, "", log.Lshortfile)
 
-type copyFunc func(root string, path string, info fs.FileInfo) io.Writer
+type walkFunc func(root string, path string, info fs.FileInfo)
 
 func main() {
 	flag.BoolVar(&releaseFlag, "r", false, "Release to Github")
@@ -149,76 +150,101 @@ func pack() {
 		logErr.Fatal(err)
 	}
 
+	// Files to package, example: files{"<to path>": "<from path>", ... }
+	files := make(map[string]string)
+
 	// Collect licenses
-	tempDir, err := ioutil.TempDir(".", "temp")
-	if err != nil {
-		logErr.Fatal(err)
-	}
-	defer os.RemoveAll(tempDir)
-	collect("vendor", tempDir)
+	collect(files, "vendor")
 	// Collect project license
-	files, err := ioutil.ReadDir(".")
-	if err != nil {
-		logErr.Fatal(err)
-	}
-	found := false
-	for _, file := range files {
-		if isLicense(file.Name()) {
-			f, err := os.Create(filepath.Join(tempDir, projectName+"-"+strings.ToLower(file.Name())))
-			if err != nil {
-				logErr.Fatal(err)
-			}
-			copy(file.Name(), f)
-			f.Close()
-			found = true
-			break
-		}
-	}
-	if !found {
+	lic := collectProjectLicense()
+	licName := projectName + "-" + strings.ToLower(lic)
+	if lic != "" {
+		files[filepath.Join(packLicDir, licName)] = lic
+	} else {
 		fmt.Fprintf(os.Stderr, "\n\u2757 Packaging %s without license\n", projectName)
 	}
 
 	// Readme
 	readme := readme(projectName)
 
-	// Package binaries
+	// Package files
 	fmt.Printf("\nPackaging:\n\n")
+	var wg sync.WaitGroup
 	for _, bin := range binaries {
-		ext := filepath.Ext(bin.Name())
-		base := strings.TrimSuffix(bin.Name(), ext)
-		// Create zip
-		fmt.Printf("\U0001F4E6 %s\n", base+".zip")
-		f, err := os.Create(filepath.Join(distDir, base+".zip"))
-		if err != nil {
-			logErr.Fatal(err)
-		}
-		defer f.Close()
-		w := zip.NewWriter(f)
-		defer w.Close()
-		// Write binary to zip
-		to, err := w.Create(projectName + ext)
-		if err != nil {
-			logErr.Fatal(err)
-		}
-		copy(filepath.Join(binDir, bin.Name()), to)
-		// Write readme to zip
-		to, err = w.Create(packReadmeName)
-		if err != nil {
-			logErr.Fatal(err)
-		}
-		_, err = io.Copy(to, strings.NewReader(readme))
-		if err != nil {
-			logErr.Fatal(err)
-		}
-		// Write relDir to zip
-		copyWalk(tempDir, func(root string, path string, info fs.FileInfo) io.Writer {
-			to, err := w.Create(filepath.Join(packLicDir, info.Name()))
+		wg.Add(1)
+		go func(b string) {
+			defer wg.Done()
+			ext := filepath.Ext(b)
+			base := strings.TrimSuffix(b, ext)
+
+			// Create unique zip for each binary
+			f, err := os.Create(filepath.Join(distDir, base+".zip"))
 			if err != nil {
 				logErr.Fatal(err)
 			}
-			return to
-		})
+			defer f.Close()
+			w := zip.NewWriter(f)
+			defer w.Close()
+
+			// Write readme to zip
+			to, err := w.Create(packReadmeName)
+			if err != nil {
+				logErr.Fatal(err)
+			}
+			_, err = io.Copy(to, strings.NewReader(readme))
+			if err != nil {
+				logErr.Fatal(err)
+			}
+
+			// Write binary to zip
+			to, err = w.Create(projectName + ext)
+			if err != nil {
+				logErr.Fatal(err)
+			}
+			err = copyToZip(to, filepath.Join(binDir, b))
+			if err != nil {
+				logErr.Fatal(err)
+			}
+
+			// Write files to zip
+			fmt.Printf("\U0001F4E6 %s\n", base+".zip")
+			for to, from := range files {
+				// Zip file
+				toDir, err := w.Create(to)
+				if err != nil {
+					logErr.Fatal(err)
+				}
+				err = copyToZip(toDir, from)
+				if err != nil {
+					logErr.Fatal(err)
+				}
+			}
+		}(bin.Name())
 	}
+	wg.Wait()
+
+}
+
+func collectProjectLicense() string {
+	files, err := ioutil.ReadDir(".")
+	if err != nil {
+		logErr.Fatal(err)
+	}
+	for _, file := range files {
+		if isLicense(file.Name()) {
+			return file.Name()
+		}
+	}
+	return ""
+}
+
+func copyToZip(to io.Writer, from string) (err error) {
+	f, err := os.Open(from)
+	if err != nil {
+		return
+	}
+	_, err = io.Copy(to, f)
+	return
 }
 
 func isLicense(fname string) bool {
@@ -288,9 +314,9 @@ func runCmd(cmd *exec.Cmd) (err error) {
 	return
 }
 
-func collect(vend, dir string) {
+func collect(files map[string]string, vend string) {
 	if _, err := os.Stat(vend); !os.IsNotExist(err) {
-		copyWalk(vend, func(root string, path string, info fs.FileInfo) io.Writer {
+		funcWalk(vend, func(root string, path string, info fs.FileInfo) {
 			name := strings.ToLower(info.Name())
 			if isLicense(name) {
 				// Parent
@@ -301,19 +327,15 @@ func collect(vend, dir string) {
 				gpName := filepath.Base(gpPath)
 				// Desired base name
 				base := strings.Join([]string{gpName, pName, name}, "-")
-				// Create file
-				to, err := os.Create(filepath.Join(dir, base))
-				if err != nil {
-					logErr.Fatal(err)
-				}
-				return to
+				files[filepath.Join(packLicDir, base)] = path
+				return
 			}
-			return nil
+			return
 		})
 	}
 }
 
-func copyWalk(dir string, f copyFunc) {
+func funcWalk(dir string, f walkFunc) {
 	err := filepath.Walk(dir, func(path string, info fs.FileInfo, err error) error {
 		if info.IsDir() {
 			return nil
@@ -331,9 +353,8 @@ func copyWalk(dir string, f copyFunc) {
 				return nil
 			}
 		}
-		if to := f(dir, path, info); to != nil {
-			copy(path, to)
-		}
+		// Run func
+		f(dir, path, info)
 		return nil
 	})
 	if err != nil {
